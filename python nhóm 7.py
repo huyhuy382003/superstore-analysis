@@ -17,7 +17,8 @@ sns.set_palette('Set2')
 sns.set_style("whitegrid")
 
 # Load the dataset
-df = pd.read_csv('Sample  Superstore 1.csv', encoding='cp1252')
+df = pd.read_csv('/Sample - Superstore (1).csv', encoding='cp1252')
+
 
 # Data preprocessing
 def preprocess_data(df):
@@ -46,6 +47,7 @@ def preprocess_data(df):
 
 df = preprocess_data(df)
 print(f"Data loaded successfully with {df.shape[0]} rows and {df.shape[1]} columns.")
+
 
 #####################################
 ### 1. RFM CUSTOMER SEGMENTATION ###
@@ -199,12 +201,18 @@ print(f"Product Category Analysis completed. Analyzed {len(category_perf)} categ
 def discount_impact_analysis(df):
     print("\n=== DISCOUNT IMPACT ANALYSIS ===")
     
-    # Create discount bins
+    # Define the categories, including 'No Discount'
+    discount_order = ['No Discount', '0-10%', '11-20%', '21-30%', '31-40%', '41-50%', '51-100%']
+
+    # Create the 'Discount Bin' column with predefined categories
     df['Discount Bin'] = pd.cut(df['Discount'], 
-                               bins=[0, 0.1, 0.2, 0.3, 0.4, 0.5, 1.0], 
-                               labels=['0-10%', '11-20%', '21-30%', '31-40%', '41-50%', '51-100%'])
-    
-    # For items with no discount, create a separate category
+                                bins=[0, 0.1, 0.2, 0.3, 0.4, 0.5, 1.0], 
+                                labels=['0-10%', '11-20%', '21-30%', '31-40%', '41-50%', '51-100%'])
+
+    # Convert 'Discount Bin' to a categorical column with all predefined categories
+    df['Discount Bin'] = pd.Categorical(df['Discount Bin'], categories=discount_order, ordered=True)
+
+    # Assign 'No Discount' where discount is 0
     df.loc[df['Discount'] == 0, 'Discount Bin'] = 'No Discount'
     
     # Analyze the impact of discounts on sales, profit, and quantity
@@ -220,12 +228,11 @@ def discount_impact_analysis(df):
     discount_impact['Avg Order Value'] = (discount_impact['Sales'] / discount_impact['Order ID']).round(2)
     discount_impact['Profit per Order'] = (discount_impact['Profit'] / discount_impact['Order ID']).round(2)
     
-    # Create a custom order for the discount bins
-    discount_order = ['No Discount', '0-10%', '11-20%', '21-30%', '31-40%', '41-50%', '51-100%']
+    # Ensure discount bins are sorted correctly
     discount_impact['Discount Bin'] = pd.Categorical(discount_impact['Discount Bin'], categories=discount_order, ordered=True)
     discount_impact.sort_values('Discount Bin', inplace=True)
     
-    # Visualize discount impact
+    # Visualization
     fig, axes = plt.subplots(2, 2, figsize=(20, 16))
     
     # Sales by Discount Bin
@@ -291,6 +298,7 @@ def discount_impact_analysis(df):
     
     return discount_impact, category_discount
 
+# Execute the function
 discount_impact, category_discount = discount_impact_analysis(df)
 print(f"Discount Impact Analysis completed. Analyzed {len(discount_impact)} discount levels.")
 
@@ -572,327 +580,10 @@ def customer_segment_analysis(df):
 segment_perf, segment_category = customer_segment_analysis(df)
 print(f"Customer Segment Analysis completed. Analyzed {len(segment_perf)} customer segments.")
 
-###############################
-### 7. ABC INVENTORY ANALYSIS ###
-###############################
-
-def abc_inventory_analysis(df):
-    print("\n=== ABC INVENTORY ANALYSIS ===")
-    
-    # Group by Product ID for inventory analysis
-    product_perf = df.groupby('Product ID').agg({
-        'Product Name': 'first',
-        'Category': 'first',
-        'Sub-Category': 'first',
-        'Sales': 'sum',
-        'Quantity': 'sum',
-        'Profit': 'sum'
-    }).reset_index()
-    
-    # Calculate profit per unit and sort
-    product_perf['Profit per Unit'] = product_perf['Profit'] / product_perf['Quantity']
-    product_perf.sort_values('Sales', ascending=False, inplace=True)
-    
-    # Calculate cumulative percentage
-    product_perf['Sales_Percent'] = product_perf['Sales'] / product_perf['Sales'].sum() * 100
-    product_perf['Cumulative_Percent'] = product_perf['Sales_Percent'].cumsum()
-    
-    # Assign ABC classes
-    product_perf['ABC_Class'] = 'C'
-    product_perf.loc[product_perf['Cumulative_Percent'] <= 70, 'ABC_Class'] = 'A'
-    product_perf.loc[(product_perf['Cumulative_Percent'] > 70) & 
-                     (product_perf['Cumulative_Percent'] <= 90), 'ABC_Class'] = 'B'
-    
-    # Summarize by ABC class
-    abc_summary = product_perf.groupby('ABC_Class').agg({
-        'Product ID': 'count',
-        'Sales': 'sum',
-        'Profit': 'sum',
-        'Quantity': 'sum'
-    }).reset_index()
-    
-    abc_summary['Products_Percent'] = (abc_summary['Product ID'] / abc_summary['Product ID'].sum() * 100).round(1)
-    abc_summary['Sales_Percent'] = (abc_summary['Sales'] / abc_summary['Sales'].sum() * 100).round(1)
-    abc_summary['Profit_Percent'] = (abc_summary['Profit'] / abc_summary['Profit'].sum() * 100).round(1)
-    abc_summary['Quantity_Percent'] = (abc_summary['Quantity'] / abc_summary['Quantity'].sum() * 100).round(1)
-    
-    # Ensure correct order for displaying ABC classes
-    abc_summary['ABC_Class'] = pd.Categorical(abc_summary['ABC_Class'], categories=['A', 'B', 'C'], ordered=True)
-    abc_summary.sort_values('ABC_Class', inplace=True)
-    
-    # Visualize ABC Analysis
-    fig, axes = plt.subplots(2, 2, figsize=(20, 16))
-    
-    # Pareto Chart (cumulative sales percentage)
-    product_sample = product_perf.head(100)  # Take top 100 products for readability
-    
-    ax1 = axes[0, 0]
-    ax1.bar(range(len(product_sample)), product_sample['Sales_Percent'], color='lightblue')
-    ax1.set_title('Pareto Chart: Product Sales Distribution', fontsize=16)
-    ax1.set_xlabel('Product Rank', fontsize=14)
-    ax1.set_ylabel('Sales Percentage (%)', fontsize=14)
-    
-    ax1_twin = ax1.twinx()
-    ax1_twin.plot(range(len(product_sample)), product_sample['Cumulative_Percent'], 'r-', linewidth=2)
-    ax1_twin.set_ylabel('Cumulative Percentage (%)', fontsize=14, color='red')
-    ax1_twin.tick_params(axis='y', labelcolor='red')
-    
-    # Add reference lines for ABC classes
-    ax1.axhline(y=0, color='gray', linestyle='-', alpha=0.3)
-    ax1_twin.axhline(y=70, color='green', linestyle='--', alpha=0.7, label='A Class (70%)')
-    ax1_twin.axhline(y=90, color='orange', linestyle='--', alpha=0.7, label='B Class (90%)')
-    ax1_twin.legend(fontsize=12)
-    
-    # ABC Class Distribution (# of products)
-    ax2 = axes[0, 1]
-    sns.barplot(x='ABC_Class', y='Product ID', data=abc_summary, ax=ax2, palette='viridis')
-    ax2.set_title('Number of Products by ABC Class', fontsize=16)
-    ax2.set_xlabel('ABC Class', fontsize=14)
-    ax2.set_ylabel('Number of Products', fontsize=14)
-    
-    # Add percentage labels
-    for i, row in enumerate(abc_summary.itertuples()):
-        ax2.text(i, row.Product_ID/2, f"{row.Products_Percent}%", 
-                ha='center', va='center', fontsize=12, color='white', fontweight='bold')
-    
-    # Sales by ABC Class
-    ax3 = axes[1, 0]
-    sns.barplot(x='ABC_Class', y='Sales', data=abc_summary, ax=ax3, palette='YlOrRd')
-    ax3.set_title('Sales by ABC Class', fontsize=16)
-    ax3.set_xlabel('ABC Class', fontsize=14)
-    ax3.set_ylabel('Sales ($)', fontsize=14)
-    
-    # Add percentage labels
-    for i, row in enumerate(abc_summary.itertuples()):
-        ax3.text(i, row.Sales/2, f"{row.Sales_Percent}%", 
-                ha='center', va='center', fontsize=12, color='white', fontweight='bold')
-    
-    # Profit by ABC Class
-    ax4 = axes[1, 1]
-    sns.barplot(x='ABC_Class', y='Profit', data=abc_summary, ax=ax4, palette='RdYlGn')
-    ax4.set_title('Profit by ABC Class', fontsize=16)
-    ax4.set_xlabel('ABC Class', fontsize=14)
-    ax4.set_ylabel('Profit ($)', fontsize=14)
-    
-    # Add percentage labels
-    for i, row in enumerate(abc_summary.itertuples()):
-        y_pos = max(row.Profit/2, 50)  # Ensure text visibility even with low profit
-        ax4.text(i, y_pos, f"{row.Profit_Percent}%", 
-                ha='center', va='center', fontsize=12, color='white', fontweight='bold')
-    
-    plt.tight_layout()
-    plt.savefig('abc_inventory_analysis.png', dpi=300, bbox_inches='tight')
-    plt.close()
-    
-    # Category-wise ABC Distribution
-    category_abc = product_perf.groupby(['Category', 'ABC_Class']).agg({
-        'Product ID': 'count',
-        'Sales': 'sum'
-    }).reset_index()
-    
-    category_abc_pivot = category_abc.pivot(index='Category', columns='ABC_Class', values='Product ID')
-    category_abc_pivot.fillna(0, inplace=True)
-    
-    plt.figure(figsize=(12, 8))
-    category_abc_pivot.plot(kind='bar', stacked=True, figsize=(12, 8), 
-                           colormap='viridis')
-    plt.title('Distribution of ABC Products by Category', fontsize=16)
-    plt.xlabel('Category', fontsize=14)
-    plt.ylabel('Number of Products', fontsize=14)
-    plt.legend(title='ABC Class')
-    
-    plt.tight_layout()
-    plt.savefig('category_abc_distribution.png', dpi=300, bbox_inches='tight')
-    plt.close()
-    
-    return product_perf, abc_summary
-
-product_perf, abc_summary = abc_inventory_analysis(df)
-print(f"ABC Inventory Analysis completed. Classified {len(product_perf)} products into ABC categories.")
-
-####################################
-### 8. PRODUCT AFFINITY ANALYSIS ###
-####################################
-
-def product_affinity_analysis(df):
-    print("\n=== PRODUCT AFFINITY ANALYSIS ===")
-    
-    # Create a basket dataset (Order ID - Sub-Category combinations)
-    baskets = df.groupby(['Order ID', 'Sub-Category'])['Sales'].sum().reset_index()
-    
-    # Create a pivot table to convert to transaction format
-    transactions = baskets.pivot_table(index='Order ID', 
-                                      columns='Sub-Category', 
-                                      values='Sales', 
-                                      aggfunc='sum', 
-                                      fill_value=0)
-    
-    # Convert to binary (0,1) to indicate purchase/no purchase
-    transactions_binary = transactions.applymap(lambda x: 1 if x > 0 else 0)
-    
-    # Calculate support for each sub-category
-    subcategory_support = transactions_binary.sum() / len(transactions_binary)
-    subcategory_support = subcategory_support.sort_values(ascending=False)
-    
-    # Find co-occurrence of sub-categories
-    cooccurrence_matrix = transactions_binary.T.dot(transactions_binary)
-    np.fill_diagonal(cooccurrence_matrix.values, 0)  # Remove self-pairs
-    
-    # Calculate lift (measure of association)
-    support_diag = np.diag(subcategory_support.values)
-    lift_matrix = cooccurrence_matrix / len(transactions_binary) / np.dot(subcategory_support.values.reshape(-1, 1), 
-                                                                      subcategory_support.values.reshape(1, -1))
-    np.fill_diagonal(lift_matrix.values, 0)
-    
-    # Get top subcategory pairs based on lift
-    pairs = []
-    for i in range(len(lift_matrix.columns)):
-        for j in range(i+1, len(lift_matrix.columns)):
-            pairs.append({
-                'Sub-Category 1': lift_matrix.index[i],
-                'Sub-Category 2': lift_matrix.columns[j],
-                'Lift': lift_matrix.iloc[i, j],
-                'Co-occurrence': cooccurrence_matrix.iloc[i, j]
-            })
-    
-    pairs_df = pd.DataFrame(pairs)
-    top_pairs = pairs_df.sort_values('Lift', ascending=False).head(20)
-    
-    # Visualize product affinity
-    plt.figure(figsize=(14, 10))
-    
-    # Product Subcategory Support (Popularity)
-    top_support = subcategory_support.head(10)
-    
-    plt.figure(figsize=(12, 6))
-    sns.barplot(x=top_support.index, y=top_support.values, palette='Blues_d')
-    plt.title('Top 10 Product Sub-Categories by Support (Popularity)', fontsize=16)
-    plt.xlabel('Sub-Category', fontsize=14)
-    plt.ylabel('Support (Percentage of Orders)', fontsize=14)
-    plt.xticks(rotation=45, ha='right')
-    plt.tight_layout()
-    plt.savefig('subcategory_support.png', dpi=300, bbox_inches='tight')
-    plt.close()
-    
-    # Plot top pairs by lift
-    plt.figure(figsize=(16, 10))
-    heatmap_size = min(15, len(lift_matrix))  # Limit size of heatmap for readability
-    top_subcategories = subcategory_support.head(heatmap_size).index
-    
-    lift_heatmap = lift_matrix.loc[top_subcategories, top_subcategories]
-    
-    mask = np.triu(np.ones_like(lift_heatmap, dtype=bool))
-    
-    plt.figure(figsize=(16, 14))
-    sns.heatmap(lift_heatmap, annot=True, fmt='.2f', cmap='YlGnBu', 
-                mask=mask, square=True, linewidths=.5, cbar_kws={'label': 'Lift Ratio'})
-    
-    plt.title('Product Affinity Analysis (Lift Ratio) - Top Sub-Categories', fontsize=16)
-    plt.tight_layout()
-    plt.savefig('product_affinity_heatmap.png', dpi=300, bbox_inches='tight')
-    plt.close()
-    
-    # Bar chart for top product pairs
-    plt.figure(figsize=(16, 12))
-    
-    pair_labels = [f"{row['Sub-Category 1']} + {row['Sub-Category 2']}" for _, row in top_pairs.head(10).iterrows()]
-    
-    sns.barplot(x='Lift', y=pair_labels, data=top_pairs.head(10), palette='viridis')
-    plt.title('Top 10 Product Sub-Category Pairs by Lift Ratio', fontsize=16)
-    plt.xlabel('Lift Ratio', fontsize=14)
-    plt.ylabel('Product Pair', fontsize=14)
-    
-    plt.tight_layout()
-    plt.savefig('top_product_pairs.png', dpi=300, bbox_inches='tight')
-    plt.close()
-    
-    return top_pairs, subcategory_support
-
-top_pairs, subcategory_support = product_affinity_analysis(df)
-print(f"Product Affinity Analysis completed. Identified {len(top_pairs)} significant product pairs.")
 
 #################################################
-### 9. PRICE SENSITIVITY & ELASTICITY ANALYSIS ###
+### 7. COMPREHENSIVE DASHBOARD (MAIN METRICS) ###
 #################################################
-
-def price_sensitivity_analysis(df):
-    print("\n=== PRICE SENSITIVITY ANALYSIS ===")
-    
-    # Filter dataset to focus on high-volume sub-categories
-    subcategory_counts = df['Sub-Category'].value_counts()
-    high_volume_subcategories = subcategory_counts[subcategory_counts > 100].index.tolist()
-    
-    price_sensitivity_df = df[df['Sub-Category'].isin(high_volume_subcategories)].copy()
-    
-    # Group data by unit price bins
-    price_sensitivity_df['Price_Bin'] = pd.cut(price_sensitivity_df['unit price'], 
-                                             bins=[0, 50, 100, 200, 500, 1000, 5000], 
-                                             labels=['0-50', '51-100', '101-200', '201-500', '501-1000', '1001+'])
-    
-    # Analyze discount effect at different price points
-    price_sensitivity = price_sensitivity_df.groupby(['Price_Bin', 'Discount_Bin']).agg({
-        'Sales': 'sum',
-        'Quantity': 'sum',
-        'Order ID': pd.Series.nunique
-    }).reset_index()
-    
-    price_sensitivity['Units per Order'] = (price_sensitivity['Quantity'] / price_sensitivity['Order ID']).round(2)
-    
-    # For elasticity analysis, look at 0 discount versus high discount
-    elasticity_data = price_sensitivity_df.groupby(['Sub-Category', 'Discount_Bin']).agg({
-        'unit price': 'mean',
-        'Quantity': 'sum',
-        'Order ID': pd.Series.nunique
-    }).reset_index()
-    
-    elasticity_data['Units per Order'] = (elasticity_data['Quantity'] / elasticity_data['Order ID']).round(2)
-    
-    # Filter to focus on specific discount levels for comparison
-    high_discount = elasticity_data[elasticity_data['Discount_Bin'].isin(['31-40%', '41-50%', '51-100%'])]
-    no_discount = elasticity_data[elasticity_data['Discount_Bin'] == 'No Discount']
-    
-    # Visualize price sensitivity
-    # Plot 1: Units per order at different price points and discount levels
-    plt.figure(figsize=(16, 10))
-    
-    g = sns.catplot(x='Price_Bin', y='Units per Order', hue='Discount_Bin', 
-                   data=price_sensitivity, kind='bar', height=8, aspect=1.5, palette='viridis')
-    
-    g.set_xlabels('Price Range ($)', fontsize=14)
-    g.set_ylabels('Units per Order', fontsize=14)
-    plt.title('Price Sensitivity: Units per Order by Price Range and Discount Level', fontsize=16)
-    plt.legend(title='Discount Level')
-    
-    plt.tight_layout()
-    plt.savefig('price_sensitivity.png', dpi=300, bbox_inches='tight')
-    plt.close()
-    
-    # Plot 2: Sub-category specific price sensitivity
-    top_subcategories = subcategory_counts.nlargest(6).index.tolist()
-    subcategory_prices = price_sensitivity_df[price_sensitivity_df['Sub-Category'].isin(top_subcategories)]
-    
-    plt.figure(figsize=(20, 16))
-    
-    g = sns.FacetGrid(subcategory_prices, col='Sub-Category', col_wrap=3, height=6)
-    g.map_dataframe(sns.scatterplot, x='unit price', y='Discount', 
-                   size='Quantity', sizes=(20, 200), alpha=0.6)
-    
-    g.set_titles('{col_name}')
-    g.set_axis_labels('Unit Price ($)', 'Discount %')
-    
-    plt.tight_layout()
-    plt.savefig('subcategory_price_sensitivity.png', dpi=300, bbox_inches='tight')
-    plt.close()
-    
-    return price_sensitivity
-
-price_sensitivity = price_sensitivity_analysis(df)
-print("Price Sensitivity Analysis completed.")
-
-#################################################
-### 10. COMPREHENSIVE DASHBOARD (MAIN METRICS) ###
-#################################################
-
 def create_dashboard(df, category_perf, segment_perf, monthly_trends):
     print("\n=== CREATING COMPREHENSIVE METRICS DASHBOARD ===")
     
@@ -905,7 +596,7 @@ def create_dashboard(df, category_perf, segment_perf, monthly_trends):
     avg_order_value = (total_sales / total_orders).round(2)
     
     # Create a comprehensive dashboard
-    fig = plt.figure(figsize=(22, 28))
+    fig = plt.figure(figsize=(22, 28))  # Define fig first
     gs = fig.add_gridspec(6, 2)
     
     # 1. KPI Summary Section
@@ -983,25 +674,33 @@ def create_dashboard(df, category_perf, segment_perf, monthly_trends):
     ax7.set_ylabel('Sales ($)', fontsize=12)
     
     # 7. Discount Impact
-    discount_data = df.groupby('Discount_Bin').agg({
-        'Sales': 'sum',
-        'Profit': 'sum'
-    }).reset_index()
-    
-    discount_order = ['No Discount', '0-10%', '11-20%', '21-30%', '31-40%', '41-50%', '51-100%']
-    discount_data['Discount_Bin'] = pd.Categorical(discount_data['Discount_Bin'], 
-                                                 categories=discount_order, 
-                                                 ordered=True)
-    discount_data.sort_values('Discount_Bin', inplace=True)
-    discount_data['Profit Margin %'] = (discount_data['Profit'] / discount_data['Sales'] * 100).round(2)
-    
-    ax8 = fig.add_subplot(gs[4, 1])
-    sns.barplot(x='Discount_Bin', y='Profit Margin %', data=discount_data, ax=ax8, palette='RdYlGn')
-    ax8.set_title('Profit Margin % by Discount Level', fontsize=16)
-    ax8.set_xlabel('Discount Level', fontsize=12)
-    ax8.set_ylabel('Profit Margin %', fontsize=12)
-    ax8.tick_params(axis='x', rotation=45)
-    ax8.axhline(y=0, color='black', linestyle='-', alpha=0.3)
+    if 'Discount' in df.columns:
+        # Create the Discount_Bin column if it doesn't exist
+        bins = [0, 0.1, 0.2, 0.3, 0.4, 0.5, 1]
+        labels = ['No Discount', '0-10%', '11-20%', '21-30%', '31-40%', '41-50%']  # 6 labels for 7 bins
+        df['Discount_Bin'] = pd.cut(df['Discount'], bins=bins, labels=labels, right=False)
+        
+        discount_data = df.groupby('Discount_Bin').agg({
+            'Sales': 'sum',
+            'Profit': 'sum'
+        }).reset_index()
+        
+        discount_order = ['No Discount', '0-10%', '11-20%', '21-30%', '31-40%', '41-50%', '51-100%']
+        discount_data['Discount_Bin'] = pd.Categorical(discount_data['Discount_Bin'], 
+                                                     categories=discount_order, 
+                                                     ordered=True)
+        discount_data.sort_values('Discount_Bin', inplace=True)
+        discount_data['Profit Margin %'] = (discount_data['Profit'] / discount_data['Sales'] * 100).round(2)
+        
+        ax8 = fig.add_subplot(gs[4, 1])  # Move this after fig is initialized
+        sns.barplot(x='Discount_Bin', y='Profit Margin %', data=discount_data, ax=ax8, palette='RdYlGn')
+        ax8.set_title('Profit Margin % by Discount Level', fontsize=16)
+        ax8.set_xlabel('Discount Level', fontsize=12)
+        ax8.set_ylabel('Profit Margin %', fontsize=12)
+        ax8.tick_params(axis='x', rotation=45)
+        ax8.axhline(y=0, color='black', linestyle='-', alpha=0.3)
+    else:
+        print("Discount column not found. Skipping discount analysis.")
     
     # 8. RFM Segment Analysis (if available)
     try:
